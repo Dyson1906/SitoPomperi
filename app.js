@@ -1,12 +1,12 @@
 'use strict';
 /* Autorimessa Vigili del Fuoco - Gestione Operativa */
 
-const STORAGE_KEY = 'autorimessa_vvf_db_v3';
+const STORAGE_KEY = 'autorimessa_vvf_db_v4';
 const COLL = ['vigili', 'mezzi', 'turni', 'squadre', 'servizi', 'manutenzioni', 'magazzino', 'report_attrezzatura'];
 
 let DB = {
   settings: {
-    comando: 'Vigili del Fuoco Mirandola / Volontariato',
+    comando: 'Comando Provinciale VV.F. — Sezione / Distaccamento',
     giorni_avviso: 30,
     adblue_litri: 120,
     adblue_taniche: 6,
@@ -28,7 +28,12 @@ const fmtDate = s => s ? s.split('-').reverse().join('/') : '';
 const num0 = new Intl.NumberFormat('it-IT', { maximumFractionDigits: 0 });
 const num1 = new Intl.NumberFormat('it-IT', { maximumFractionDigits: 1 });
 const fNum = v => (v === '' || v == null) ? '' : num0.format(+v);
-const daysTo = s => Math.round((new Date(s + 'T00:00:00') - new Date(todayStr() + 'T00:00:00')) / 864e5);
+const daysTo = s => {
+  if (!s) return 999;
+  try {
+    return Math.round((new Date(s + 'T00:00:00') - new Date(todayStr() + 'T00:00:00')) / 864e5);
+  } catch (e) { return 999; }
+};
 
 function reindex() {
   IDX = {};
@@ -53,18 +58,21 @@ function saveDB() {
   } catch (e) { console.error(e); }
   reindex();
   const com = $('#comando-name');
-  if (com) com.textContent = DB.settings.comando || 'Autorimessa VFM';
+  if (com) com.textContent = DB.settings.comando || 'Autorimessa VVF';
 }
 
 function loadDB() {
-  const raw = localStorage.getItem(STORAGE_KEY);
-  if (raw) {
-    try {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
       const parsed = JSON.parse(raw);
       DB = { ...DB, ...parsed, settings: { ...DB.settings, ...(parsed.settings || {}) } };
       COLL.forEach(c => { if (!Array.isArray(DB[c])) DB[c] = []; });
-    } catch (e) { console.error(e); seedDemoData(); }
-  } else {
+    } else {
+      seedDemoData();
+    }
+  } catch (e) {
+    console.error('Errore caricamento DB, ripristino demo:', e);
     seedDemoData();
   }
   saveDB();
@@ -83,6 +91,15 @@ function toast(msg, err) {
   t.hidden = false;
   clearTimeout(toast.t);
   toast.t = setTimeout(() => t.hidden = true, err ? 5500 : 2800);
+}
+
+function toggleSidebar(open) {
+  const sb = $('#sidebar');
+  const ov = $('#sidebar-overlay');
+  if (!sb || !ov) return;
+  const isOpen = open !== undefined ? open : !sb.classList.contains('open');
+  sb.classList.toggle('open', isOpen);
+  ov.hidden = !isOpen;
 }
 
 /* ---------- costanti operative VVF ---------- */
@@ -157,7 +174,7 @@ const SCHEMA = {
       { k: 'fascia', l: 'Fascia oraria (12 ore)', t: 'select', opts: FASCE_12H, def: 'Diurno (08:00 - 20:00)', req: 1 },
       { k: 'gruppo', l: 'Gruppo in turno', t: 'select', opts: GRUPPI_TURNO, def: 'Turno A', req: 1 },
       { k: 'capoturno_id', l: 'Capo Turno / Responsabile', t: 'ref', ref: 'vigili' },
-      { k: 'personale_ids', l: 'Personale presente nel turno (Ctrl/Cmd + click per selezione multipla)', t: 'multiref', ref: 'vigili', full: 1 },
+      { k: 'personale_ids', l: 'Personale presente nel turno', t: 'multiref', ref: 'vigili', full: 1 },
       { k: 'note', l: 'Note di turno / Sostituzioni', t: 'textarea', full: 1 },
     ],
     cols: [
@@ -176,21 +193,21 @@ const SCHEMA = {
     label: 'Squadre Operative', one: 'squadra', nuovo: 'Nuova squadra', icon: '🚒', sort: ['nome', 'asc'],
     statusOpts: TIPI_SQUADRA,
     fields: [
-      { k: 'nome', l: 'Nome / Sigla Squadra (es. 1ª Partenza, Supporto 1)', t: 'text', req: 1 },
+      { k: 'nome', l: 'Nome / Sigla Squadra', t: 'text', req: 1 },
       { k: 'tipo', l: 'Tipologia Squadra', t: 'select', opts: TIPI_SQUADRA, def: 'Squadra Ordinaria (5 unità)', req: 1 },
       { k: 'turno_id', l: 'Assegna a Turno', t: 'ref', ref: 'turni' },
       { k: 'mezzo_id', l: 'Mezzo assegnato', t: 'ref', ref: 'mezzi' },
-      { s: 'Ruoli della Squadra (Supporto = solo Capo Squadra + Autista)' },
+      { s: 'Ruoli della Squadra' },
       { k: 'caposquadra_id', l: 'Capo Squadra', t: 'ref', ref: 'vigili', req: 1 },
       { k: 'autista_id', l: 'Autista', t: 'ref', ref: 'vigili', req: 1 },
-      { k: 'prima_lancia_id', l: '1ª Lancia (escluso per Supporto)', t: 'ref', ref: 'vigili' },
-      { k: 'seconda_lancia_id', l: '2ª Lancia (escluso per Supporto)', t: 'ref', ref: 'vigili' },
-      { k: 'terza_lancia_id', l: '3ª Lancia (escluso per Supporto)', t: 'ref', ref: 'vigili' },
+      { k: 'prima_lancia_id', l: '1ª Lancia', t: 'ref', ref: 'vigili' },
+      { k: 'seconda_lancia_id', l: '2ª Lancia', t: 'ref', ref: 'vigili' },
+      { k: 'terza_lancia_id', l: '3ª Lancia', t: 'ref', ref: 'vigili' },
       { k: 'note', l: 'Note', t: 'textarea', full: 1 },
     ],
     cols: [
       { l: 'Squadra', v: r => r.nome, h: r => `<strong>${esc(r.nome)}</strong>` },
-      { l: 'Tipologia', v: r => r.tipo, h: r => badge(r.tipo.split(' (')[0], r.tipo.includes('Supporto') ? 'warn' : r.tipo.includes('Aggiuntiva') ? 'info' : 'ok') },
+      { l: 'Tipologia', v: r => r.tipo, h: r => badge(r.tipo.split(' (')[0], r.tipo.includes('Supporto') ? 'warn' : 'ok') },
       { l: 'Turno assegnato', v: r => labelTurno(r.turno_id) },
       { l: 'Mezzo', v: r => labelMezzo(r.mezzo_id) },
       { l: 'Capo Squadra', v: r => nomeVigile(r.caposquadra_id) },
@@ -203,18 +220,18 @@ const SCHEMA = {
     label: 'Mezzi Autorimessa', one: 'mezzo', nuovo: 'Nuovo mezzo', icon: '🚛', sort: ['sigla', 'asc'],
     statusOpts: STATI_MEZZO,
     fields: [
-      { k: 'sigla', l: 'Sigla / Codice Mezzo (es. APS 1, ABP 2)', t: 'text', req: 1 },
+      { k: 'sigla', l: 'Sigla / Codice Mezzo', t: 'text', req: 1 },
       { k: 'tipo', l: 'Categoria Mezzo', t: 'select', opts: TIPI_MEZZO, def: 'APS (Autopompa serbatoio)', req: 1 },
       { k: 'targa', l: 'Targa VF', t: 'text', req: 1 },
       { k: 'marca_modello', l: 'Marca / Modello', t: 'text' },
       { k: 'anno', l: 'Anno', t: 'number' },
       { k: 'km_attuali', l: 'Km attuali', t: 'number' },
       { k: 'stato', l: 'Stato operativo', t: 'select', opts: STATI_MEZZO, def: 'Operativo' },
-      { s: 'Scadenze e Controlli Periodici' },
+      { s: 'Scadenze' },
       { k: 'scad_revisione', l: 'Scadenza Revisione', t: 'date' },
       { k: 'scad_tagliando', l: 'Prossimo Tagliando', t: 'date' },
       { k: 'scad_assicurazione', l: 'Copertura Assicurativa', t: 'date' },
-      { k: 'note', l: 'Note dotazioni / Allestimento', t: 'textarea', full: 1 },
+      { k: 'note', l: 'Note', t: 'textarea', full: 1 },
     ],
     cols: [
       { l: 'Sigla', v: r => r.sigla, h: r => `<strong>${esc(r.sigla)}</strong>` },
@@ -231,7 +248,7 @@ const SCHEMA = {
     label: 'Vigili Sezione', one: 'vigile', nuovo: 'Nuovo vigile', icon: '🧑‍🚒', sort: ['cognome', 'asc'],
     statusOpts: STATI_VIGILE,
     fields: [
-      { k: 'qualifica', l: 'Qualifica (es. CS, CR, VFC, VP)', t: 'text', def: 'VP', req: 1 },
+      { k: 'qualifica', l: 'Qualifica', t: 'text', def: 'VP', req: 1 },
       { k: 'cognome', l: 'Cognome', t: 'text', req: 1 },
       { k: 'nome', l: 'Nome', t: 'text', req: 1 },
       { k: 'gruppo', l: 'Turno di appartenenza', t: 'select', opts: GRUPPI_TURNO, def: 'Turno A' },
@@ -241,7 +258,7 @@ const SCHEMA = {
       { s: 'Scadenze Personali' },
       { k: 'scad_visita', l: 'Visita Medica Periodica', t: 'date' },
       { k: 'scad_patente', l: 'Rinnovo Patente VF', t: 'date' },
-      { k: 'note', l: 'Specializzazioni (SAF, TPSS, NBCR, ecc.)', t: 'textarea', full: 1 },
+      { k: 'note', l: 'Note', t: 'textarea', full: 1 },
     ],
     cols: [
       { l: 'Qualifica', v: r => r.qualifica, h: r => badge(r.qualifica, 'info') },
@@ -261,12 +278,12 @@ const SCHEMA = {
       { k: 'data', l: 'Data intervento', t: 'date', req: 1, def: 'today' },
       { k: 'mezzo_id', l: 'Mezzo', t: 'ref', ref: 'mezzi', req: 1 },
       { k: 'stato', l: 'Tipo manutenzione', t: 'select', opts: TIPI_MANUTENZIONE, def: 'Tagliando', req: 1 },
-      { k: 'portato_da_id', l: 'Chi ha portato il mezzo (Vigile)', t: 'ref', ref: 'vigili', req: 1 },
-      { k: 'eseguito_da', l: 'Officina / Eseguito da', t: 'text', placeholder: 'Es. Officina Autorimessa / Ditta esterna' },
-      { k: 'km', l: 'Km al momento dell\'intervento', t: 'number' },
-      { k: 'descrizione', l: 'Descrizione dettagliata manutenzione effettuata', t: 'textarea', req: 1, full: 1 },
-      { s: 'Promemoria Prossimo Intervento' },
-      { k: 'prossima_data', l: 'Prossima scadenza (data)', t: 'date' },
+      { k: 'portato_da_id', l: 'Portato da (Vigile)', t: 'ref', ref: 'vigili', req: 1 },
+      { k: 'eseguito_da', l: 'Officina / Eseguito da', t: 'text' },
+      { k: 'km', l: 'Km', t: 'number' },
+      { k: 'descrizione', l: 'Descrizione intervento', t: 'textarea', req: 1, full: 1 },
+      { s: 'Prossimo Intervento' },
+      { k: 'prossima_data', l: 'Prossima scadenza', t: 'date' },
       { k: 'prossimi_km', l: 'Oppure ai km', t: 'number' },
     ],
     cols: [
@@ -274,22 +291,22 @@ const SCHEMA = {
       { l: 'Mezzo', v: r => labelMezzo(r.mezzo_id), h: r => `<strong>${esc(labelMezzo(r.mezzo_id))}</strong>` },
       { l: 'Tipo', v: r => r.stato, h: r => badge(r.stato, 'warn') },
       { l: 'Portato da', v: r => nomeVigile(r.portato_da_id) },
-      { l: 'Descrizione intervento', v: r => r.descrizione, wrap: 1 },
-      { l: 'Officina / Tecnico', v: r => r.eseguito_da },
+      { l: 'Descrizione', v: r => r.descrizione, wrap: 1 },
+      { l: 'Officina', v: r => r.eseguito_da },
       { l: 'Km', v: r => +r.km || 0, h: r => fNum(r.km), num: 1 },
       { l: 'Prossimo', v: r => r.prossima_data || '9999', h: r => r.prossima_data ? fmtDate(r.prossima_data) : (r.prossimi_km ? fNum(r.prossimi_km) + ' km' : '—') },
     ],
   },
 
   magazzino: {
-    label: 'Magazzino & AdBlue', one: 'articolo', nuovo: 'Nuovo articolo magazzino', icon: '📦', sort: ['nome', 'asc'],
+    label: 'Magazzino & AdBlue', one: 'articolo', nuovo: 'Nuovo articolo', icon: '📦', sort: ['nome', 'asc'],
     fields: [
       { k: 'nome', l: 'Nome articolo / Materiale', t: 'text', req: 1 },
       { k: 'categoria', l: 'Categoria', t: 'select', opts: ['Lubrificanti e Liquidi', 'Estinguenti / Schiumogeni', 'Ricambi Mezzi', 'DPI e Vestiario', 'Materiale di Consumo'], def: 'Lubrificanti e Liquidi' },
       { k: 'quantita', l: 'Quantità in giacenza', t: 'number', req: 1 },
-      { k: 'unita', l: 'Unità di misura (pz, litri, taniche, scatole)', t: 'text', def: 'pz', req: 1 },
-      { k: 'scorta_min', l: 'Scorta minima di avviso', t: 'number', def: 2 },
-      { k: 'ubicazione', l: 'Scaffale / Ubicazione', t: 'text' },
+      { k: 'unita', l: 'Unità di misura', t: 'text', def: 'pz', req: 1 },
+      { k: 'scorta_min', l: 'Scorta minima', t: 'number', def: 2 },
+      { k: 'ubicazione', l: 'Ubicazione', t: 'text' },
       { k: 'note', l: 'Note', t: 'textarea', full: 1 },
     ],
     cols: [
@@ -309,20 +326,20 @@ const SCHEMA = {
     label: 'Report Attrezzatura', one: 'attrezzatura', nuovo: 'Inserisci attrezzatura', icon: '🪓', sort: ['nome', 'asc'],
     statusOpts: ['Integro', 'Da verificare', 'Guasto / Mancante'],
     fields: [
-      { k: 'nome', l: 'Nome attrezzatura / Caricamento', t: 'text', req: 1, placeholder: 'Es. Mototroncatrice, Divaricatore, Naspo, Manichetta UNI 70' },
-      { k: 'matricola', l: 'Matricola / Codice inventario', t: 'text' },
-      { k: 'mezzo_id', l: 'Mezzo o Vano di collocazione', t: 'ref', ref: 'mezzi' },
-      { k: 'vano', l: 'Vano / Posizione (es. Vano 1 DX, Cabina)', t: 'text' },
+      { k: 'nome', l: 'Nome attrezzatura', t: 'text', req: 1, placeholder: 'Es. Mototroncatrice, Divaricatore...' },
+      { k: 'matricola', l: 'Matricola', t: 'text' },
+      { k: 'mezzo_id', l: 'Mezzo o Vano', t: 'ref', ref: 'mezzi' },
+      { k: 'vano', l: 'Posizione', t: 'text' },
       { k: 'stato', l: 'Stato efficienza', t: 'select', opts: ['Integro', 'Da verificare', 'Guasto / Mancante'], def: 'Integro', req: 1 },
-      { k: 'data_controllo', l: 'Data ultimo controllo', t: 'date', def: 'today' },
-      { k: 'verificato_da_id', l: 'Verificato da (Vigile)', t: 'ref', ref: 'vigili' },
-      { k: 'note', l: 'Anomalie riscontrate / Note', t: 'textarea', full: 1 },
+      { k: 'data_controllo', l: 'Data controllo', t: 'date', def: 'today' },
+      { k: 'verificato_da_id', l: 'Verificato da', t: 'ref', ref: 'vigili' },
+      { k: 'note', l: 'Note', t: 'textarea', full: 1 },
     ],
     cols: [
       { l: 'Attrezzatura', v: r => r.nome, h: r => `<strong>${esc(r.nome)}</strong>` },
       { l: 'Matricola', v: r => r.matricola },
-      { l: 'Mezzo assegnato', v: r => labelMezzo(r.mezzo_id) || 'Autorimessa / Sede' },
-      { l: 'Vano / Posizione', v: r => r.vano },
+      { l: 'Mezzo assegnato', v: r => labelMezzo(r.mezzo_id) || 'Autorimessa' },
+      { l: 'Posizione', v: r => r.vano },
       { l: 'Ultimo controllo', v: r => r.data_controllo, h: r => fmtDate(r.data_controllo) },
       { l: 'Verificato da', v: r => nomeVigile(r.verificato_da_id) },
       { l: 'Stato', v: r => r.stato, h: r => badge(r.stato) },
@@ -337,7 +354,7 @@ const soglia = () => +DB.settings.giorni_avviso || 30;
 function scadStato(g) { return g < 0 ? 'scaduta' : g <= soglia() ? 'in scadenza' : 'ok'; }
 function prossimaScad(rec, defs) {
   let best = null;
-  defs.forEach(([k, l]) => { if (rec[k] && (!best || rec[k] < best.data)) best = { data: rec[k], voce: l }; });
+  defs.forEach(([k, l]) => { if (rec && rec[k] && (!best || rec[k] < best.data)) best = { data: rec[k], voce: l }; });
   return best;
 }
 function scadCell(s) {
@@ -348,14 +365,16 @@ function scadCell(s) {
 }
 function tutteScadenze() {
   const out = [];
-  (DB.mezzi || []).forEach(m => SCAD_MEZZO.forEach(([k, l]) => m[k] && out.push({ tipo: 'Mezzo', chi: `${m.sigla} (${m.targa})`, voce: l, data: m[k], vista: 'mezzi', id: m.id })));
-  (DB.vigili || []).forEach(v => SCAD_VIGILE.forEach(([k, l]) => v[k] && out.push({ tipo: 'Vigile', chi: `${v.qualifica} ${v.cognome} ${v.nome}`, voce: l, data: v[k], vista: 'vigili', id: v.id })));
-  (DB.manutenzioni || []).filter(x => x.prossima_data).forEach(x => {
-    const m = IDX.mezzi.get(+x.mezzo_id);
-    if (m) out.push({ tipo: 'Manutenzione', chi: `${m.sigla} (${m.targa})`, voce: x.stato, data: x.prossima_data, vista: 'manutenzioni', id: x.id });
-  });
-  out.forEach(s => { s.giorni = daysTo(s.data); s.stato = scadStato(s.giorni); });
-  return out.sort((a, b) => a.data.localeCompare(b.data));
+  try {
+    (DB.mezzi || []).forEach(m => SCAD_MEZZO.forEach(([k, l]) => m && m[k] && out.push({ tipo: 'Mezzo', chi: `${m.sigla} (${m.targa})`, voce: l, data: m[k], vista: 'mezzi', id: m.id })));
+    (DB.vigili || []).forEach(v => SCAD_VIGILE.forEach(([k, l]) => v && v[k] && out.push({ tipo: 'Vigile', chi: `${v.qualifica} ${v.cognome} ${v.nome}`, voce: l, data: v[k], vista: 'vigili', id: v.id })));
+    (DB.manutenzioni || []).filter(x => x && x.prossima_data).forEach(x => {
+      const m = IDX.mezzi.get(+x.mezzo_id);
+      if (m) out.push({ tipo: 'Manutenzione', chi: `${m.sigla} (${m.targa})`, voce: x.stato, data: x.prossima_data, vista: 'manutenzioni', id: x.id });
+    });
+    out.forEach(s => { s.giorni = daysTo(s.data); s.stato = scadStato(s.giorni); });
+  } catch (e) { console.error('Errore in tutteScadenze:', e); }
+  return out.sort((a, b) => (a.data || '').localeCompare(b.data || ''));
 }
 
 /* ---------- navigazione ---------- */
@@ -381,25 +400,44 @@ const NAV = [
 function renderNav() {
   const navEl = $('#nav');
   if (!navEl) return;
-  const urgenti = tutteScadenze().filter(s => s.stato !== 'ok').length;
-  const attivi = (DB.servizi || []).filter(s => s.stato === 'Aperto / In corso').length;
-  navEl.innerHTML = NAV.map(n => n[0] === 'sep' ? '<div class="sep"></div>' :
-    `<a data-action="go" data-to="${n[0]}" tabindex="0" role="link" class="${route === n[0] ? 'active' : ''}">
-      <span>${n[1]}</span><span class="lbl">${n[2]}</span>
-      ${n[0] === 'scadenze' && urgenti ? `<span class="count">${urgenti}</span>` : ''}
-      ${n[0] === 'servizi' && attivi ? `<span class="count">${attivi}</span>` : ''}
-    </a>`).join('');
+  try {
+    const urgenti = tutteScadenze().filter(s => s.stato !== 'ok').length;
+    const attivi = (DB.servizi || []).filter(s => s && s.stato === 'Aperto / In corso').length;
+    navEl.innerHTML = NAV.map(n => n[0] === 'sep' ? '<div class="sep"></div>' :
+      `<a data-action="go" data-to="${n[0]}" tabindex="0" role="link" class="${route === n[0] ? 'active' : ''}">
+        <span>${n[1]}</span><span class="lbl">${n[2]}</span>
+        ${n[0] === 'scadenze' && urgenti ? `<span class="count">${urgenti}</span>` : ''}
+        ${n[0] === 'servizi' && attivi ? `<span class="count">${attivi}</span>` : ''}
+      </a>`).join('');
+  } catch (e) {
+    console.error('Errore renderNav:', e);
+    navEl.innerHTML = NAV.map(n => n[0] === 'sep' ? '<div class="sep"></div>' :
+      `<a data-action="go" data-to="${n[0]}" tabindex="0" role="link"><span>${n[1]}</span><span class="lbl">${n[2]}</span></a>`).join('');
+  }
 }
 
 function go(to) { location.hash = '#/' + to; }
+
 function render() {
-  route = (location.hash.replace(/^#\//, '') || 'dashboard');
-  if (!VIEWS[route] && !SCHEMA[route]) route = 'dashboard';
-  renderNav();
-  const main = $('#main');
-  if (!main) return;
-  main.scrollTop = 0;
-  (VIEWS[route] || (() => renderList(route)))(main);
+  try {
+    route = (location.hash.replace(/^#\//, '') || 'dashboard');
+    if (!VIEWS[route] && !SCHEMA[route]) route = 'dashboard';
+    renderNav();
+    const main = $('#main');
+    if (!main) return;
+    main.scrollTop = 0;
+    (VIEWS[route] || (() => renderList(route)))(main);
+  } catch (err) {
+    console.error('Errore critico in render():', err);
+    const main = $('#main');
+    if (main) {
+      main.innerHTML = `<div class="panel" style="margin:20px; border-color:var(--bad);">
+        <h2>⚠️ Si è verificato un errore di visualizzazione</h2>
+        <p>Dettaglio: <code>${esc(err.message)}</code></p>
+        <p style="margin-top:15px"><button class="btn primary" onclick="localStorage.removeItem('${STORAGE_KEY}'); location.reload();">🔄 Ripristina Dati e Ricarica</button></p>
+      </div>`;
+    }
+  }
 }
 
 /* ---------- liste generiche ---------- */
@@ -408,7 +446,7 @@ function listState(name) {
 }
 
 function renderAdBlueBanner() {
-  const s = DB.settings;
+  const s = DB.settings || {};
   const litri = +s.adblue_litri || 0;
   const taniche = +s.adblue_taniche || 0;
   const cap = +s.litri_per_tanica || 20;
@@ -429,6 +467,10 @@ function renderList(name) {
   const S = SCHEMA[name], st = listState(name);
   const main = $('#main');
   main.innerHTML = `
+    <div class="mobile-topbar no-print">
+      <button class="btn small" id="sidebar-toggle" aria-label="Apri menu">☰ Menu</button>
+      <span class="mobile-title">${esc(S.label)}</span>
+    </div>
     <div class="page-head"><h1>${S.icon} ${S.label}</h1><span class="spacer"></span>
       <button class="btn" data-action="csv" data-name="${name}">Esporta CSV</button>
       <button class="btn primary" data-action="new" data-name="${name}">+ ${S.nuovo}</button>
@@ -447,13 +489,13 @@ function visibleRows(name) {
   const S = SCHEMA[name], st = listState(name);
   let rows = (DB[name] || []).slice();
   if (st.stato) {
-    rows = rows.filter(r => (r.stato === st.stato) || (r.gruppo === st.stato) || (r.tipo === st.stato));
+    rows = rows.filter(r => r && ((r.stato === st.stato) || (r.gruppo === st.stato) || (r.tipo === st.stato)));
   }
-  if (st.from) rows = rows.filter(r => r.data >= st.from);
-  if (st.to) rows = rows.filter(r => r.data <= st.to);
+  if (st.from) rows = rows.filter(r => r && r.data >= st.from);
+  if (st.to) rows = rows.filter(r => r && r.data <= st.to);
   if (st.q) {
     const q = st.q.toLowerCase();
-    rows = rows.filter(r => S.cols.some(c => String(c.v(r) ?? '').toLowerCase().includes(q)) || String(r.note || '').toLowerCase().includes(q));
+    rows = rows.filter(r => r && (S.cols.some(c => String(c.v(r) ?? '').toLowerCase().includes(q)) || String(r.note || '').toLowerCase().includes(q)));
   }
   const [key, dir] = st.sort;
   const col = S.cols.find(c => c.l === key) || S.cols[0];
@@ -493,7 +535,7 @@ function updateTable(name) {
 
 /* ---------- form ---------- */
 function refOptions(f, selected) {
-  let list = (DB[f.ref] || []).filter(r => !f.filter || f.filter(r) || r.id === +selected || (Array.isArray(selected) && selected.includes(r.id)));
+  let list = (DB[f.ref] || []).filter(r => r && (!f.filter || f.filter(r) || r.id === +selected || (Array.isArray(selected) && selected.includes(r.id))));
   const label = r => {
     if (f.ref === 'vigili') return `${r.qualifica} ${r.cognome} ${r.nome} (${r.gruppo})`;
     if (f.ref === 'mezzi') return `${r.sigla} — ${r.tipo} [${r.targa}]`;
@@ -528,7 +570,7 @@ function fieldHtml(f, rec) {
 
 function openForm(name, id, prefill = {}) {
   const S = SCHEMA[name];
-  const rec = id ? { ...IDX[name].get(id) } : { ...prefill };
+  const rec = id ? { ...(IDX[name].get(id) || {}) } : { ...prefill };
   const modal = $('#modal');
   if (!modal) return;
   modal.innerHTML = `<form class="modal" data-name="${name}" data-id="${id || ''}" novalidate role="dialog" aria-modal="true">
@@ -541,51 +583,20 @@ function openForm(name, id, prefill = {}) {
       <button type="submit" class="btn primary">Salva</button>
     </footer></form>`;
   modal.hidden = false;
-
-  if (name === 'servizi') {
-    const sqSel = $('#f_squadra_id');
-    if (sqSel) {
-      sqSel.addEventListener('change', () => {
-        const sq = IDX.squadre.get(+sqSel.value);
-        if (!sq) return;
-        if (sq.mezzo_id) $('#f_mezzo_id').value = sq.mezzo_id;
-        if (sq.caposquadra_id) $('#f_caposquadra_id').value = sq.caposquadra_id;
-        if (sq.autista_id) $('#f_autista_id').value = sq.autista_id;
-        if (sq.prima_lancia_id) $('#f_prima_lancia_id').value = sq.prima_lancia_id;
-        if (sq.seconda_lancia_id) $('#f_seconda_lancia_id').value = sq.seconda_lancia_id;
-        if (sq.terza_lancia_id) $('#f_terza_lancia_id').value = sq.terza_lancia_id;
-        toast(`Componenti caricati da ${sq.nome}`);
-      });
-    }
-  }
-
-  if (name === 'turni' && !id) {
-    const grpSel = $('#f_gruppo');
-    const persSel = $('#f_personale_ids');
-    if (grpSel && persSel) {
-      const syncGroupMembers = () => {
-        const g = grpSel.value;
-        const memberIds = new Set((DB.vigili || []).filter(v => v.gruppo === g && v.stato === 'In servizio').map(v => v.id));
-        Array.from(persSel.options).forEach(opt => { opt.selected = memberIds.has(+opt.value); });
-      };
-      syncGroupMembers();
-      grpSel.addEventListener('change', syncGroupMembers);
-    }
-  }
 }
 
 function openAdBlueModal() {
-  const s = DB.settings;
+  const s = DB.settings || {};
   const modal = $('#modal');
   if (!modal) return;
   modal.innerHTML = `<form class="modal" data-adblue-form novalidate>
     <header><h2>💧 Aggiorna Giacenza AdBlue</h2><button type="button" class="btn small" data-action="close-modal">✕</button></header>
     <div class="body"><div class="form-grid">
-      <div class="field"><label>Litri sfusi (cisterna / fusto)</label><input type="number" step="0.5" min="0" name="adblue_litri" value="${s.adblue_litri || 0}"></div>
-      <div class="field"><label>Numero Taniche sigillate</label><input type="number" step="1" min="0" name="adblue_taniche" value="${s.adblue_taniche || 0}"></div>
-      <div class="field full"><label>Capacità singola tanica (Litri)</label><input type="number" step="1" min="1" name="litri_per_tanica" value="${s.litri_per_tanica || 20}"></div>
+      <div class="field"><label>Litri sfusi</label><input type="number" step="0.5" min="0" name="adblue_litri" value="${s.adblue_litri || 0}"></div>
+      <div class="field"><label>Taniche</label><input type="number" step="1" min="0" name="adblue_taniche" value="${s.adblue_taniche || 0}"></div>
+      <div class="field full"><label>Capacità tanica (Litri)</label><input type="number" step="1" min="1" name="litri_per_tanica" value="${s.litri_per_tanica || 20}"></div>
     </div></div>
-    <footer><button type="button" class="btn" data-action="close-modal">Annulla</button><button type="submit" class="btn primary">Salva Giacenza</button></footer>
+    <footer><button type="button" class="btn" data-action="close-modal">Annulla</button><button type="submit" class="btn primary">Salva</button></footer>
   </form>`;
   modal.hidden = false;
 }
@@ -596,22 +607,22 @@ function openAutoTurniModal() {
   const modal = $('#modal');
   if (!modal) return;
   modal.innerHTML = `<form class="modal" data-autoturni-form novalidate>
-    <header><h2>🔄 Genera Rotazione Turni 12h (${esc(meseLabel)})</h2><button type="button" class="btn small" data-action="close-modal">✕</button></header>
+    <header><h2>🔄 Rotazione Turni (${esc(meseLabel)})</h2><button type="button" class="btn small" data-action="close-modal">✕</button></header>
     <div class="body">
-      <p class="sub" style="margin-top:0">Genera automaticamente i turni diurni (08:00–20:00) e notturni (20:00–08:00) per tutto il mese visualizzato, seguendo la turnazione standard VVF e inserendo in automatico i vigili appartenenti a ciascun gruppo.</p>
+      <p class="sub" style="margin-top:0">Genera automaticamente i turni diurni e notturni del mese.</p>
       <div class="form-grid">
-        <div class="field"><label>Gruppo di partenza (1° del mese - Diurno 08-20)</label>
+        <div class="field"><label>Gruppo di partenza (1° del mese)</label>
           <select name="start_gruppo">${GRUPPI_TURNO.map(g => `<option>${g}</option>`).join('')}</select>
         </div>
         <div class="field"><label>Modalità</label>
           <select name="overwrite">
             <option value="skip">Aggiungi solo nei giorni vuoti</option>
-            <option value="replace">Sostituisci turni esistenti del mese</option>
+            <option value="replace">Sostituisci esistenti</option>
           </select>
         </div>
       </div>
     </div>
-    <footer><button type="button" class="btn" data-action="close-modal">Annulla</button><button type="submit" class="btn primary">Genera Turni del Mese</button></footer>
+    <footer><button type="button" class="btn" data-action="close-modal">Annulla</button><button type="submit" class="btn primary">Genera Turni</button></footer>
   </form>`;
   modal.hidden = false;
 }
@@ -647,13 +658,6 @@ function submitForm(form) {
     return;
   }
 
-  if (name === 'squadre' && rec.tipo && rec.tipo.includes('Supporto')) {
-    if (rec.prima_lancia_id || rec.seconda_lancia_id || rec.terza_lancia_id) {
-      if (err) { err.textContent = 'La Squadra Supporto Aggiuntiva prevede solo 2 persone (Capo Squadra + Autista). Rimuovi le lance.'; err.hidden = false; }
-      return;
-    }
-  }
-
   if (id) {
     const idx = (DB[name] || []).findIndex(x => x.id === id);
     if (idx >= 0) DB[name][idx] = { ...DB[name][idx], ...rec, id };
@@ -669,7 +673,7 @@ function submitForm(form) {
 }
 
 function del(name, id) {
-  if (!confirm(`Eliminare questo record (${SCHEMA[name].one})?`)) return;
+  if (!confirm(`Eliminare questo record?`)) return;
   DB[name] = (DB[name] || []).filter(x => x.id !== id);
   saveDB();
   closeModal();
@@ -677,7 +681,7 @@ function del(name, id) {
   toast('Record eliminato.');
 }
 
-/* ---------- CSV, ICS & Stampa Servizio ---------- */
+/* ---------- CSV, ICS & Stampa ---------- */
 function downloadCsv(filename, header, rows) {
   const q = v => { v = String(v ?? ''); return /[;"\n\r]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
   const text = '\uFEFF' + [header, ...rows].map(r => r.map(q).join(';')).join('\r\n');
@@ -695,8 +699,9 @@ function exportTurniIcs() {
   if (!(DB.turni || []).length) return toast('Nessun turno da esportare.', true);
   const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Autorimessa VVF//Turni 12h//IT'];
   DB.turni.forEach(t => {
+    if (!t || !t.data) return;
     const cleanDate = t.data.replace(/-/g, '');
-    const isNotte = t.fascia.toLowerCase().includes('notturno');
+    const isNotte = (t.fascia || '').toLowerCase().includes('notturno');
     const dtStart = isNotte ? `${cleanDate}T200000` : `${cleanDate}T080000`;
     let dtEnd;
     if (isNotte) {
@@ -759,18 +764,22 @@ const VIEWS = {};
 VIEWS.dashboard = main => {
   const now = new Date();
   const scad = tutteScadenze(), urg = scad.filter(s => s.stato !== 'ok');
-  const serviziAperti = (DB.servizi || []).filter(s => s.stato === 'Aperto / In corso');
-  const mezziOp = (DB.mezzi || []).filter(m => m.stato === 'Operativo').length;
-  const turniOggi = (DB.turni || []).filter(t => t.data === todayStr());
-  const guastiAttr = (DB.report_attrezzatura || []).filter(a => a.stato !== 'Integro').length;
+  const serviziAperti = (DB.servizi || []).filter(s => s && s.stato === 'Aperto / In corso');
+  const mezziOp = (DB.mezzi || []).filter(m => m && m.stato === 'Operativo').length;
+  const turniOggi = (DB.turni || []).filter(t => t && t.data === todayStr());
+  const guastiAttr = (DB.report_attrezzatura || []).filter(a => a && a.stato !== 'Integro').length;
 
   main.innerHTML = `
+    <div class="mobile-topbar no-print">
+      <button class="btn small" id="sidebar-toggle" aria-label="Apri menu">☰ Menu</button>
+      <span class="mobile-title">Cruscotto VVF</span>
+    </div>
     <div class="page-head">
       <h1>📊 Cruscotto Autorimessa</h1>
       <span class="sub">${now.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span>
       <span class="spacer"></span>
-      <button class="btn info" data-action="new" data-name="turni">+ Crea Turno 12h</button>
-      <button class="btn primary" data-action="new" data-name="servizi">🚨 Apri un Servizio</button>
+      <button class="btn info" data-action="new" data-name="turni">+ Turno</button>
+      <button class="btn primary" data-action="new" data-name="servizi">🚨 Servizio</button>
     </div>
 
     ${renderAdBlueBanner()}
@@ -779,65 +788,50 @@ VIEWS.dashboard = main => {
       <div class="kpi ${serviziAperti.length ? 'alert' : ''}">
         <div class="label">Servizi Aperti</div>
         <div class="value">${serviziAperti.length}</div>
-        <div class="note">${(DB.servizi || []).length} servizi totali registrati</div>
+        <div class="note">${(DB.servizi || []).length} totali</div>
       </div>
       <div class="kpi">
         <div class="label">Mezzi Operativi</div>
         <div class="value">${mezziOp} / ${(DB.mezzi || []).length}</div>
-        <div class="note">${(DB.mezzi || []).filter(m => m.stato !== 'Operativo').length} in officina / fuori servizio</div>
+        <div class="note">In officina/fuori: ${(DB.mezzi || []).filter(m => m && m.stato !== 'Operativo').length}</div>
       </div>
       <div class="kpi">
-        <div class="label">Turni Oggi (12h)</div>
+        <div class="label">Turni Oggi</div>
         <div class="value">${turniOggi.length}</div>
-        <div class="note">${turniOggi.map(t => t.gruppo).join(' · ') || 'Nessun turno inserito oggi'}</div>
+        <div class="note">${turniOggi.map(t => t.gruppo).join(' · ') || 'Nessuno'}</div>
       </div>
       <div class="kpi ${urg.length ? 'alert' : ''}">
-        <div class="label">Scadenze & Revisioni</div>
+        <div class="label">Scadenze</div>
         <div class="value">${urg.length}</div>
         <div class="note">${urg.filter(s => s.stato === 'scaduta').length} scadute</div>
       </div>
       <div class="kpi ${guastiAttr ? 'alert' : ''}">
-        <div class="label">Attrezzatura da verific.</div>
+        <div class="label">Attrezzature</div>
         <div class="value">${guastiAttr}</div>
-        <div class="note">su ${(DB.report_attrezzatura || []).length} attrezzature censite</div>
+        <div class="note">da verificare</div>
       </div>
     </div>
 
     <div class="grid two">
       <div class="panel">
-        <h2>🚨 Servizi in Corso / Recenti</h2>
-        ${(DB.servizi || []).length ? `<table><thead><tr><th class="nosort">Data</th><th class="nosort">Intervento</th><th class="nosort">Mezzo</th><th class="nosort">Capo Squadra</th><th class="nosort">Stato</th></tr></thead><tbody>
-          ${(DB.servizi || []).slice().sort((a, b) => b.data.localeCompare(a.data)).slice(0, 6).map(s => `<tr>
+        <h2>🚨 Servizi Recenti</h2>
+        ${(DB.servizi || []).length ? `<div class="table-wrap"><table><thead><tr><th class="nosort">Data</th><th class="nosort">Intervento</th><th class="nosort">Mezzo</th><th class="nosort">Stato</th></tr></thead><tbody>
+          ${(DB.servizi || []).slice().sort((a, b) => (b.data || '').localeCompare(a.data || '')).slice(0, 5).map(s => `<tr>
             <td>${fmtDate(s.data)}</td>
-            <td><strong>${esc(s.tipologia)}</strong><br><small class="sub">${esc(s.luogo)}</small></td>
+            <td><strong>${esc(s.tipologia)}</strong></td>
             <td>${esc(labelMezzo(s.mezzo_id))}</td>
-            <td>${esc(nomeVigile(s.caposquadra_id))}</td>
             <td>${badge(s.stato)}</td>
-          </tr>`).join('')}</tbody></table>` : '<div class="empty">Nessun servizio registrato.</div>'}
+          </tr>`).join('')}</tbody></table></div>` : '<div class="empty">Nessun servizio.</div>'}
       </div>
 
       <div class="panel">
-        <h2>⏰ Scadenze Mezzi, Vigili e Manutenzioni</h2>
-        ${scad.length ? `<ul class="list-plain">${scad.slice(0, 6).map(s => `<li>
+        <h2>⏰ Scadenze Imminenti</h2>
+        ${scad.length ? `<ul class="list-plain">${scad.slice(0, 5).map(s => `<li>
           <div class="grow"><strong>${esc(s.chi)}</strong> — ${esc(s.voce)}<div class="meta">${s.tipo} · ${fmtDate(s.data)}</div></div>
           ${scadBadge(s)}
-        </li>`).join('')}</ul>` : '<div class="empty">Nessuna scadenza imminente.</div>'}
+        </li>`).join('')}</ul>` : '<div class="empty">Nessuna scadenza.</div>'}
         <p style="margin:10px 0 0"><a href="#/scadenze">Tutte le scadenze →</a></p>
       </div>
-    </div>
-
-    <div class="panel">
-      <h2>🚒 Squadre Operative Configurate</h2>
-      ${(DB.squadre || []).length ? `<table><thead><tr><th class="nosort">Squadra</th><th class="nosort">Tipologia</th><th class="nosort">Turno</th><th class="nosort">Mezzo</th><th class="nosort">Capo Squadra</th><th class="nosort">Autista</th><th class="nosort">Lance</th></tr></thead><tbody>
-        ${(DB.squadre || []).map(sq => `<tr>
-          <td><strong>${esc(sq.nome)}</strong></td>
-          <td>${esc(sq.tipo)}</td>
-          <td>${esc(labelTurno(sq.turno_id) || '—')}</td>
-          <td>${esc(labelMezzo(sq.mezzo_id) || '—')}</td>
-          <td>${esc(nomeVigile(sq.caposquadra_id))}</td>
-          <td>${esc(nomeVigile(sq.autista_id))}</td>
-          <td>${esc([sq.prima_lancia_id, sq.seconda_lancia_id, sq.terza_lancia_id].filter(Boolean).map(nomeVigile).join(', ') || '—')}</td>
-        </tr>`).join('')}</tbody></table>` : '<div class="empty">Nessuna squadra creata. Vai su “Squadre Operative”.</div>'}
     </div>`;
 };
 
@@ -863,61 +857,53 @@ VIEWS.calendario = main => {
   for (let day = 1; day <= daysInMonth; day++) {
     const dateStr = `${y}-${pad(m + 1)}-${pad(day)}`;
     const turniGiorno = (DB.turni || [])
-      .filter(t => t.data === dateStr && (!grpFilter || t.gruppo === grpFilter))
-      .sort((a, b) => a.fascia.localeCompare(b.fascia));
+      .filter(t => t && t.data === dateStr && (!grpFilter || t.gruppo === grpFilter))
+      .sort((a, b) => (a.fascia || '').localeCompare(b.fascia || ''));
     const isToday = dateStr === todayStr();
 
     cells += `<div class="cal-day ${isToday ? 'today' : ''}">
       <div style="display:flex;justify-content:space-between;align-items:center">
         <span class="cal-num">${day}</span>
-        <button class="btn small" style="padding:0 6px;font-size:12px;line-height:1.4" data-action="new-turno-day" data-date="${dateStr}" title="Aggiungi turno il ${fmtDate(dateStr)}">+</button>
+        <button class="btn small" style="padding:0 4px;font-size:11px" data-action="new-turno-day" data-date="${dateStr}">+</button>
       </div>
       ${turniGiorno.map(t => {
-        const isNotte = t.fascia.toLowerCase().includes('notturno');
-        const persNames = (t.personale_ids || []).map(nomeVigile).filter(Boolean);
-        return `<div class="cal-ev ${grpClass(t.gruppo)}" data-action="edit" data-name="turni" data-id="${t.id}" title="Clicca per modificare turno e vigili">
+        const isNotte = (t.fascia || '').toLowerCase().includes('notturno');
+        return `<div class="cal-ev ${grpClass(t.gruppo)}" data-action="edit" data-name="turni" data-id="${t.id}">
           <strong>${isNotte ? '🌙' : '☀️'} ${esc(t.gruppo)}</strong>
-          <span class="ev-time">${isNotte ? '20:00 - 08:00' : '08:00 - 20:00'} · ${persNames.length} vigili</span>
         </div>`;
       }).join('')}
     </div>`;
   }
 
   main.innerHTML = `
-    <div class="page-head">
-      <h1>🗓️ Calendario Turni (12 ore)</h1>
-      <span class="spacer"></span>
-      <button class="btn" data-action="export-ics">📥 Esporta .ICS</button>
-      <button class="btn info" data-action="open-autoturni">🔄 Genera Rotazione Mese</button>
-      <button class="btn primary" data-action="new" data-name="turni">+ Nuovo Turno 12h</button>
+    <div class="mobile-topbar no-print">
+      <button class="btn small" id="sidebar-toggle" aria-label="Apri menu">☰ Menu</button>
+      <span class="mobile-title">Calendario</span>
     </div>
-
+    <div class="page-head">
+      <h1>🗓️ Calendario Turni</h1>
+      <span class="spacer"></span>
+      <button class="btn" data-action="export-ics">📥 .ICS</button>
+      <button class="btn info" data-action="open-autoturni">🔄 Mese</button>
+      <button class="btn primary" data-action="new" data-name="turni">+ Turno</button>
+    </div>
     <div class="panel">
-      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-        <button class="btn small" data-action="cal-prev">◀ Prec.</button>
-        <strong style="font-size:17px;text-transform:capitalize;min-width:170px;text-align:center">${esc(monthName)}</strong>
-        <button class="btn small" data-action="cal-next">Succ. ▶</button>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <button class="btn small" data-action="cal-prev">◀</button>
+        <strong style="font-size:15px;text-transform:capitalize;min-width:140px;text-align:center">${esc(monthName)}</strong>
+        <button class="btn small" data-action="cal-next">▶</button>
         <button class="btn small" data-action="cal-today">Oggi</button>
-        <select data-filter="cal-gruppo" style="border:1px solid var(--line);border-radius:8px;padding:5px 10px;background:#fff">
-          <option value="">Tutti i Gruppi (A, B, C, D)</option>
+        <select data-filter="cal-gruppo" style="border:1px solid var(--line);border-radius:8px;padding:5px 8px;background:#fff">
+          <option value="">Tutti i Gruppi</option>
           ${GRUPPI_TURNO.map(g => `<option ${grpFilter === g ? 'selected' : ''}>${g}</option>`).join('')}
         </select>
-        <span class="spacer" style="flex:1"></span>
-        <span class="sub">Clicca su un turno per modificarlo o inserire i vigili presenti.</span>
       </div>
-
-      <div class="cal-legend">
-        <span><i style="background:#bbdefb;border:1px solid #0d47a1"></i> Turno A</span>
-        <span><i style="background:#c8e6c9;border:1px solid #1b5e20"></i> Turno B</span>
-        <span><i style="background:#ffe0b2;border:1px solid #e65100"></i> Turno C</span>
-        <span><i style="background:#e1bee7;border:1px solid #4a148c"></i> Turno D</span>
-        <span class="sub">| ☀️ Diurno 08:00–20:00 · 🌙 Notturno 20:00–08:00</span>
-      </div>
-
-      <div class="cal-grid">
-        <div class="cal-head">Lun</div><div class="cal-head">Mar</div><div class="cal-head">Mer</div>
-        <div class="cal-head">Gio</div><div class="cal-head">Ven</div><div class="cal-head">Sab</div><div class="cal-head">Dom</div>
-        ${cells}
+      <div style="overflow-x:auto; margin-top:12px;">
+        <div class="cal-grid" style="min-width:550px">
+          <div class="cal-head">Lun</div><div class="cal-head">Mar</div><div class="cal-head">Mer</div>
+          <div class="cal-head">Gio</div><div class="cal-head">Ven</div><div class="cal-head">Sab</div><div class="cal-head">Dom</div>
+          ${cells}
+        </div>
       </div>
     </div>`;
 };
@@ -925,80 +911,91 @@ VIEWS.calendario = main => {
 VIEWS.scadenze = main => {
   const st = UI.scad ||= { f: '' };
   const all = tutteScadenze(), rows = all.filter(s => !st.f || s.stato === st.f);
-  main.innerHTML = `<div class="page-head"><h1>⏰ Scadenze Autorimessa & Personale</h1><span class="sub">Avviso ${soglia()} giorni prima</span></div>
+  main.innerHTML = `
+    <div class="mobile-topbar no-print">
+      <button class="btn small" id="sidebar-toggle" aria-label="Apri menu">☰ Menu</button>
+      <span class="mobile-title">Scadenze</span>
+    </div>
+    <div class="page-head"><h1>⏰ Scadenze</h1><span class="sub">Avviso ${soglia()} giorni prima</span></div>
     <div class="toolbar"><select data-filter="scad"><option value="">Tutte (${all.length})</option>
-      <option value="scaduta" ${st.f === 'scaduta' ? 'selected' : ''}>Scadute (${all.filter(s => s.stato === 'scaduta').length})</option>
-      <option value="in scadenza" ${st.f === 'in scadenza' ? 'selected' : ''}>In scadenza (${all.filter(s => s.stato === 'in scadenza').length})</option>
-      <option value="ok" ${st.f === 'ok' ? 'selected' : ''}>Regolari (${all.filter(s => s.stato === 'ok').length})</option></select></div>
+      <option value="scaduta" ${st.f === 'scaduta' ? 'selected' : ''}>Scadute</option>
+      <option value="in scadenza" ${st.f === 'in scadenza' ? 'selected' : ''}>In scadenza</option>
+      <option value="ok" ${st.f === 'ok' ? 'selected' : ''}>Regolari</option></select></div>
     <div class="table-wrap">${rows.length ? `<table><thead><tr><th class="nosort">Stato</th><th class="nosort">Data</th><th class="nosort">Ambito</th><th class="nosort">Mezzo / Vigile</th><th class="nosort">Scadenza</th><th class="nosort"></th></tr></thead><tbody>
-    ${rows.map(s => `<tr><td>${scadBadge(s)}</td><td>${fmtDate(s.data)}</td><td>${s.tipo}</td><td><strong>${esc(s.chi)}</strong></td><td>${esc(s.voce)}</td><td class="actions"><button class="btn small" data-action="edit" data-name="${s.vista}" data-id="${s.id}">Apri</button></td></tr>`).join('')}</tbody></table>` : '<div class="empty">Nessuna scadenza registrata.</div>'}</div>`;
+    ${rows.map(s => `<tr><td>${scadBadge(s)}</td><td>${fmtDate(s.data)}</td><td>${s.tipo}</td><td><strong>${esc(s.chi)}</strong></td><td>${esc(s.voce)}</td><td class="actions"><button class="btn small" data-action="edit" data-name="${s.vista}" data-id="${s.id}">Apri</button></td></tr>`).join('')}</tbody></table>` : '<div class="empty">Nessuna scadenza.</div>'}</div>`;
 };
 
 VIEWS.impostazioni = main => {
-  const s = DB.settings;
-  main.innerHTML = `<div class="page-head"><h1>⚙️ Impostazioni & Backup</h1></div>
-  <form class="panel settings-block" data-settings><h2>Dati Comando / Sezione</h2>
+  const s = DB.settings || {};
+  main.innerHTML = `
+    <div class="mobile-topbar no-print">
+      <button class="btn small" id="sidebar-toggle" aria-label="Apri menu">☰ Menu</button>
+      <span class="mobile-title">Impostazioni</span>
+    </div>
+    <div class="page-head"><h1>⚙️ Impostazioni & Backup</h1></div>
+  <form class="panel settings-block" data-settings><h2>Dati Comando</h2>
     <div class="form-grid">
       <div class="field full"><label>Nome Comando / Distaccamento</label><input name="comando" value="${esc(s.comando)}"></div>
-      <div class="field"><label>Giorni preavviso scadenze</label><input name="giorni_avviso" type="number" min="1" max="365" value="${soglia()}"></div>
-      <div class="field"><label>Litri per singola tanica AdBlue</label><input name="litri_per_tanica" type="number" min="1" value="${s.litri_per_tanica || 20}"></div>
+      <div class="field"><label>Giorni preavviso</label><input name="giorni_avviso" type="number" min="1" max="365" value="${soglia()}"></div>
+      <div class="field"><label>Litri tanica AdBlue</label><input name="litri_per_tanica" type="number" min="1" value="${s.litri_per_tanica || 20}"></div>
     </div>
     <p style="margin:14px 0 0"><button class="btn primary" type="submit">Salva Impostazioni</button></p>
   </form>
-
-  <div class="panel settings-block"><h2>Backup Dati Autorimessa (JSON)</h2>
-    <p>Esporta o ripristina l'intero archivio (mezzi, turni, squadre, vigili, servizi, manutenzioni e magazzino).</p>
-    <div class="row-btns">
-      <button class="btn" data-action="export-json">⬇ Scarica Backup JSON</button>
-      <label class="btn" style="cursor:pointer">⬆ Ripristina da Backup<input type="file" accept=".json,application/json" data-restore hidden></label>
-      <button class="btn danger" data-action="reset-demo">Ripristina Dati Dimostrativi</button>
+  <div class="panel settings-block"><h2>Backup Dati (JSON)</h2>
+    <div class="row-btns" style="display:flex;gap:10px;flex-wrap:wrap">
+      <button class="btn" data-action="export-json">⬇ Scarica JSON</button>
+      <label class="btn" style="cursor:pointer">⬆ Ripristina<input type="file" accept=".json,application/json" data-restore hidden></label>
+      <button class="btn danger" data-action="reset-demo">Ripristina Demo</button>
     </div>
   </div>`;
 };
 
 /* ---------- eventi ---------- */
 document.addEventListener('click', e => {
-  const el = e.target.closest('[data-action]'); if (!el) return;
-  const d = el.dataset;
-  switch (d.action) {
-    case 'go': go(d.to); break;
-    case 'new': openForm(d.name); break;
-    case 'new-turno-day': openForm('turni', null, { data: d.date }); break;
-    case 'edit': openForm(d.name, +d.id); break;
-    case 'del': del(d.name, +d.id); break;
-    case 'del-modal': del(d.name, +d.id); break;
-    case 'close-modal': closeModal(); break;
-    case 'csv': csvOf(d.name); break;
-    case 'export-ics': exportTurniIcs(); break;
-    case 'print-servizio': printServizio(+d.id); break;
-    case 'edit-adblue': openAdBlueModal(); break;
-    case 'open-autoturni': openAutoTurniModal(); break;
-    case 'cal-prev': UI.calDate = new Date(UI.calDate.getFullYear(), UI.calDate.getMonth() - 1, 1); VIEWS.calendario($('#main')); break;
-    case 'cal-next': UI.calDate = new Date(UI.calDate.getFullYear(), UI.calDate.getMonth() + 1, 1); VIEWS.calendario($('#main')); break;
-    case 'cal-today': UI.calDate = new Date(); VIEWS.calendario($('#main')); break;
-    case 'sort': {
-      const st = listState(d.name);
-      st.sort = [d.col, st.sort[0] === d.col && st.sort[1] === 'asc' ? 'desc' : 'asc'];
-      updateTable(d.name); break;
-    }
-    case 'export-json': {
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(new Blob([JSON.stringify(DB, null, 2)], { type: 'application/json' }));
-      a.download = `backup-autorimessa-vvf-${todayStr()}.json`;
-      a.click();
-      break;
-    }
-    case 'reset-demo':
-      if (confirm('Sovrascrivere i dati attuali con quelli di esempio dell\'autorimessa?')) {
-        seedDemoData(); saveDB(); render(); toast('Dati dimostrativi caricati.');
+  const el = e.target.closest('[data-action]');
+  if (el) {
+    const d = el.dataset;
+    switch (d.action) {
+      case 'go': go(d.to); toggleSidebar(false); break;
+      case 'new': openForm(d.name); break;
+      case 'new-turno-day': openForm('turni', null, { data: d.date }); break;
+      case 'edit': openForm(d.name, +d.id); break;
+      case 'del': del(d.name, +d.id); break;
+      case 'del-modal': del(d.name, +d.id); break;
+      case 'close-modal': closeModal(); break;
+      case 'csv': csvOf(d.name); break;
+      case 'export-ics': exportTurniIcs(); break;
+      case 'print-servizio': printServizio(+d.id); break;
+      case 'edit-adblue': openAdBlueModal(); break;
+      case 'open-autoturni': openAutoTurniModal(); break;
+      case 'cal-prev': UI.calDate = new Date(UI.calDate.getFullYear(), UI.calDate.getMonth() - 1, 1); VIEWS.calendario($('#main')); break;
+      case 'cal-next': UI.calDate = new Date(UI.calDate.getFullYear(), UI.calDate.getMonth() + 1, 1); VIEWS.calendario($('#main')); break;
+      case 'cal-today': UI.calDate = new Date(); VIEWS.calendario($('#main')); break;
+      case 'sort': {
+        const st = listState(d.name);
+        st.sort = [d.col, st.sort[0] === d.col && st.sort[1] === 'asc' ? 'desc' : 'asc'];
+        updateTable(d.name); break;
       }
-      break;
+      case 'export-json': {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(new Blob([JSON.stringify(DB, null, 2)], { type: 'application/json' }));
+        a.download = `backup-autorimessa-${todayStr()}.json`;
+        a.click();
+        break;
+      }
+      case 'reset-demo':
+        if (confirm('Ripristinare i dati dimostrativi?')) {
+          seedDemoData(); saveDB(); render(); toast('Dati ripristinati.');
+        }
+        break;
+    }
   }
+  if (e.target.closest('#sidebar-toggle')) { toggleSidebar(true); return; }
+  if (e.target.closest('#sidebar-close') || e.target.closest('#sidebar-overlay')) { toggleSidebar(false); return; }
 });
 
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && !$('#modal')?.hidden) closeModal();
-  if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('#nav a')) { e.preventDefault(); go(e.target.dataset.to); }
 });
 
 document.addEventListener('submit', e => {
@@ -1010,7 +1007,7 @@ document.addEventListener('submit', e => {
     DB.settings.adblue_litri = parseFloat(fd.get('adblue_litri')) || 0;
     DB.settings.adblue_taniche = parseInt(fd.get('adblue_taniche'), 10) || 0;
     DB.settings.litri_per_tanica = parseInt(fd.get('litri_per_tanica'), 10) || 20;
-    saveDB(); closeModal(); render(); toast('Giacenza AdBlue aggiornata.');
+    saveDB(); closeModal(); render(); toast('AdBlue aggiornato.');
   }
   if (f.matches('[data-autoturni-form]')) {
     const fd = new FormData(f);
@@ -1023,7 +1020,7 @@ document.addEventListener('submit', e => {
 
     if (!DB.turni) DB.turni = [];
     if (overwrite) {
-      DB.turni = DB.turni.filter(t => !t.data.startsWith(monthPrefix));
+      DB.turni = DB.turni.filter(t => t && !t.data.startsWith(monthPrefix));
     }
 
     const startIdx = GRUPPI_TURNO.indexOf(startGrp);
@@ -1037,9 +1034,9 @@ document.addEventListener('submit', e => {
         { fascia: FASCE_12H[0], gruppo: grpDiurno },
         { fascia: FASCE_12H[1], gruppo: grpNotturno }
       ].forEach(slot => {
-        const exists = DB.turni.some(t => t.data === dateStr && t.fascia === slot.fascia);
+        const exists = DB.turni.some(t => t && t.data === dateStr && t.fascia === slot.fascia);
         if (!exists) {
-          const membri = (DB.vigili || []).filter(v => v.gruppo === slot.gruppo && v.stato === 'In servizio').map(v => v.id);
+          const membri = (DB.vigili || []).filter(v => v && v.gruppo === slot.gruppo && v.stato === 'In servizio').map(v => v.id);
           DB.turni.push({
             id: nextId('turni'),
             data: dateStr,
@@ -1047,14 +1044,14 @@ document.addEventListener('submit', e => {
             gruppo: slot.gruppo,
             capoturno_id: membri[0] || null,
             personale_ids: membri,
-            note: 'Generato da rotazione mensile'
+            note: 'Rotazione automatica'
           });
           creati++;
         }
       });
     }
     saveDB(); closeModal(); render();
-    toast(`Creati ${creati} turni da 12 ore per il mese selezionato.`);
+    toast(`Creati ${creati} turni.`);
   }
   if (f.matches('[data-settings]')) {
     const obj = Object.fromEntries(new FormData(f).entries());
@@ -1078,56 +1075,46 @@ document.addEventListener('change', async e => {
     try {
       const parsed = JSON.parse(await file.text());
       DB = { ...DB, ...parsed };
-      saveDB(); render(); toast('Backup ripristinato con successo.');
-    } catch (err) { toast('File backup non valido.', true); }
+      saveDB(); render(); toast('Backup ripristinato.');
+    } catch (err) { toast('File non valido.', true); }
     e.target.value = '';
   }
 });
 window.addEventListener('hashchange', render);
 
-/* ---------- dati dimostrativi iniziali ---------- */
 function seedDemoData() {
   const today = todayStr();
   DB.vigili = [
-    { id: 1, qualifica: 'CS', cognome: 'Rossi', nome: 'Marco', gruppo: 'Turno A', patente: '3° Grado + AS', telefono: '333-1122334', stato: 'In servizio', scad_visita: '2027-04-15', scad_patente: '2028-01-10' },
-    { id: 2, qualifica: 'VP', cognome: 'Bianchi', nome: 'Luca', gruppo: 'Turno A', patente: '3° Grado', telefono: '333-2233445', stato: 'In servizio', scad_visita: '2026-12-01', scad_patente: '2027-06-20' },
-    { id: 3, qualifica: 'VP', cognome: 'Verdi', nome: 'Alessandro', gruppo: 'Turno A', patente: '2° Grado', telefono: '333-3344556', stato: 'In servizio', scad_visita: '2027-02-10', scad_patente: '2027-09-12' },
-    { id: 4, qualifica: 'VP', cognome: 'Neri', nome: 'Davide', gruppo: 'Turno A', patente: '2° Grado', telefono: '333-4455667', stato: 'In servizio', scad_visita: '2027-05-19', scad_patente: '2028-03-01' },
-    { id: 5, qualifica: 'VFC', cognome: 'Gallo', nome: 'Matteo', gruppo: 'Turno A', patente: '2° Grado', telefono: '333-5566778', stato: 'In servizio', scad_visita: '2027-01-22', scad_patente: '2027-11-30' },
-    { id: 6, qualifica: 'CR', cognome: 'Ferrari', nome: 'Paolo', gruppo: 'Turno B', patente: '3° Grado + AS', telefono: '333-6677889', stato: 'In servizio', scad_visita: '2027-03-11', scad_patente: '2028-05-14' },
-    { id: 7, qualifica: 'VP', cognome: 'Conti', nome: 'Simone', gruppo: 'Turno B', patente: '3° Grado', telefono: '333-7788990', stato: 'In servizio', scad_visita: '2027-07-08', scad_patente: '2027-10-19' }
+    { id: 1, qualifica: 'CS', cognome: 'Rossi', nome: 'Marco', gruppo: 'Turno A', patente: '3° Grado', telefono: '333-1122334', stato: 'In servizio', scad_visita: '2027-04-15' },
+    { id: 2, qualifica: 'VP', cognome: 'Bianchi', nome: 'Luca', gruppo: 'Turno A', patente: '3° Grado', telefono: '333-2233445', stato: 'In servizio', scad_visita: '2026-12-01' }
   ];
   DB.mezzi = [
-    { id: 1, sigla: 'APS 1', tipo: 'APS (Autopompa serbatoio)', targa: 'VF 28410', marca_modello: 'Iveco Eurocargo 150E28', anno: 2021, km_attuali: 42300, stato: 'Operativo', scad_revisione: '2026-12-15', scad_tagliando: '2027-02-20' },
-    { id: 2, sigla: 'ABP 1', tipo: 'ABP (Autobotte)', targa: 'VF 25119', marca_modello: 'Iveco Trakker 260T36', anno: 2019, km_attuali: 31800, stato: 'Operativo', scad_revisione: '2027-03-10', scad_tagliando: '2027-01-15' },
-    { id: 3, sigla: 'CA-PU 1', tipo: 'CA-PU (Pickup)', targa: 'VF 31092', marca_modello: 'Ford Ranger 4x4', anno: 2023, km_attuali: 18400, stato: 'Operativo', scad_revisione: '2027-06-01', scad_tagliando: '2027-04-01' },
-    { id: 4, sigla: 'AS 1', tipo: 'AS (AutoScala)', targa: 'VF 21904', marca_modello: 'Iveco Magirus M32L', anno: 2018, km_attuali: 24900, stato: 'In manutenzione', scad_revisione: '2026-11-28', scad_tagliando: '2026-12-05' },
-    { id: 5, sigla: 'AV 1', tipo: 'AV (Autovettura)', targa: 'VF 33411', marca_modello: 'Fiat Tipo', anno: 2022, km_attuali: 51200, stato: 'Operativo', scad_revisione: '2027-05-12', scad_tagliando: '2027-03-22' }
+    { id: 1, sigla: 'APS 1', tipo: 'APS (Autopompa serbatoio)', targa: 'VF 28410', marca_modello: 'Iveco Eurocargo', anno: 2021, km_attuali: 42300, stato: 'Operativo', scad_revisione: '2026-12-15' },
+    { id: 2, sigla: 'ABP 1', tipo: 'ABP (Autobotte)', targa: 'VF 25119', marca_modello: 'Iveco Trakker', anno: 2019, km_attuali: 31800, stato: 'Operativo', scad_revisione: '2027-03-10' }
   ];
   DB.turni = [
-    { id: 1, data: today, fascia: 'Diurno (08:00 - 20:00)', gruppo: 'Turno A', capoturno_id: 1, personale_ids: [1, 2, 3, 4, 5], note: 'Turno ordinario diurno' },
-    { id: 2, data: today, fascia: 'Notturno (20:00 - 08:00)', gruppo: 'Turno B', capoturno_id: 6, personale_ids: [6, 7], note: 'Turno notturno 12h' }
+    { id: 1, data: today, fascia: 'Diurno (08:00 - 20:00)', gruppo: 'Turno A', capoturno_id: 1, personale_ids: [1, 2] }
   ];
   DB.squadre = [
-    { id: 1, nome: '1ª Partenza', tipo: 'Squadra Ordinaria (5 unità)', turno_id: 1, mezzo_id: 1, caposquadra_id: 1, autista_id: 2, prima_lancia_id: 3, seconda_lancia_id: 4, terza_lancia_id: 5 },
-    { id: 2, nome: 'Supporto Autobotte', tipo: 'Squadra Supporto Aggiuntiva (2 unità: CS + Autista)', turno_id: 1, mezzo_id: 2, caposquadra_id: 6, autista_id: 7 }
+    { id: 1, nome: '1ª Partenza', tipo: 'Squadra Ordinaria (5 unità)', turno_id: 1, mezzo_id: 1, caposquadra_id: 1, autista_id: 2 }
   ];
   DB.servizi = [
-    { id: 1, data: today, ora_uscita: '09:15', stato: 'Aperto / In corso', tipologia: 'Incendio sterpaglie / boschivo', luogo: 'Strada Provinciale km 14', mezzo_id: 1, squadra_id: 1, caposquadra_id: 1, autista_id: 2, prima_lancia_id: 3, seconda_lancia_id: 4, terza_lancia_id: 5, note: 'Richiesto supporto ABP' }
+    { id: 1, data: today, ora_uscita: '09:15', stato: 'Aperto / In corso', tipologia: 'Incendio sterpaglie', luogo: 'Via Roma', mezzo_id: 1, caposquadra_id: 1, autista_id: 2 }
   ];
-  DB.manutenzioni = [
-    { id: 1, data: today, mezzo_id: 4, stato: 'Tagliando', portato_da_id: 2, eseguito_da: 'Officina Centrale VVF', km: 24900, descrizione: 'Sostituzione olio motore, filtri e controllo stabilizzatori autoscala', prossima_data: '2027-05-15' }
-  ];
+  DB.manutenzioni = [];
   DB.magazzino = [
-    { id: 1, nome: 'Olio Motore 10W-40 Sintetico', categoria: 'Lubrificanti e Liquidi', quantita: 45, unita: 'litri', scorta_min: 20, ubicazione: 'Scaffale A1' },
-    { id: 2, nome: 'Liquido Schiumogeno FFFP', categoria: 'Estinguenti / Schiumogeni', quantita: 8, unita: 'taniche', scorta_min: 4, ubicazione: 'Deposito B' }
+    { id: 1, nome: 'Olio Motore', categoria: 'Lubrificanti e Liquidi', quantita: 45, unita: 'litri', scorta_min: 20 }
   ];
-  DB.report_attrezzatura = [
-    { id: 1, nome: 'Mototroncatrice Stihl TS 420', matricola: 'MT-04', mezzo_id: 1, vano: 'Vano 2 SX', stato: 'Integro', data_controllo: today, verificato_da_id: 3 },
-    { id: 2, nome: 'Divaricatore Idraulico Lukas', matricola: 'DIV-01', mezzo_id: 1, vano: 'Vano 3 DX', stato: 'Da verificare', data_controllo: today, verificato_da_id: 4, note: 'Controllare pressione tubo idraulico' }
-  ];
+  DB.report_attrezzatura = [];
 }
 
-/* ---------- avvio ---------- */
-loadDB();
-render();   
+/* ---------- avvio sicuro ---------- */
+try {
+  loadDB();
+  render();
+} catch (err) {
+  console.error('Errore fatale all’avvio:', err);
+  localStorage.removeItem(STORAGE_KEY);
+  seedDemoData();
+  render();
+}

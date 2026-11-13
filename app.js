@@ -6,7 +6,7 @@ const COLL = ['vigili', 'mezzi', 'turni', 'squadre', 'servizi', 'manutenzioni', 
 
 let DB = {
   settings: {
-    comando: 'Comando Provinciale VV.F. — Sezione / Distaccamento',
+    comando: 'Vigili del Fuoco Mirandola / Volontariato',
     giorni_avviso: 30,
     adblue_litri: 120,
     adblue_taniche: 6,
@@ -53,7 +53,7 @@ function saveDB() {
   } catch (e) { console.error(e); }
   reindex();
   const com = $('#comando-name');
-  if (com) com.textContent = DB.settings.comando || 'Autorimessa VVF';
+  if (com) com.textContent = DB.settings.comando || 'Autorimessa VFM';
 }
 
 function loadDB() {
@@ -1130,4 +1130,4 @@ function seedDemoData() {
 
 /* ---------- avvio ---------- */
 loadDB();
-render();
+render();   

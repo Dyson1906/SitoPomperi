@@ -6,7 +6,7 @@ const COLL = ['vigili', 'mezzi', 'turni', 'squadre', 'servizi', 'manutenzioni', 
 
 let DB = {
   settings: {
-    comando: 'Comando Provinciale VV.F. — Sezione / Distaccamento',
+    comando: 'Vigili del Fuoco Mirandola (MO)',
     giorni_avviso: 30,
     adblue_litri: 120,
     adblue_taniche: 6,
